@@ -1,0 +1,97 @@
+ /* Background image */
+    .bg-image {
+      position: fixed;
+      inset: 0;
+      background-image: url("https://images.unsplash.com/photo-1581092336406-c8fcae43e84e");
+      background-size: cover;
+      background-position: center;
+      z-index: -2;
+    }
+
+    /* Blur overlay */
+    .bg-blur {
+      position: fixed;
+      inset: 0;
+      backdrop-filter: blur(10px);
+      background: rgba(0, 0, 0, 0.35);
+      z-index: -1;
+    }
+
+    /* Content layer */
+    body {
+      position: relative;
+      z-index: 0;
+    }
+
+    body.theme-light {
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      min-height: 100vh;
+    }
+
+    body.theme-dark {
+      background: linear-gradient(135deg, #121212, #1f1f1f);
+      color: #f1f1f1;
+    }
+
+    body.theme-dark .navbar {
+      background-color: #000 !important;
+    }
+
+    body.theme-dark .card {
+      background-color: #1e1e1e;
+      color: #fff;
+    }
+
+    body.theme-dark .form-control {
+      background-color: #2b2b2b;
+      color: #fff;
+      border-color: #444;
+    }
+
+    section {
+      background: transparent;
+    }
+
+    .card {
+      border-radius: 12px;
+    }
+
+    .logo-icon {
+      transition: transform 0.3s ease;
+    }
+
+    .logo-icon:hover {
+      transform: scale(1.3);
+    }
+
+
+    /* Glassmorphism Background */
+    body.theme-glass {
+      margin: 0;
+      min-height: 100vh;
+      background-image: url("https://images.unsplash.com/photo-1581092336406-c8fcae43e84e");
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      font-family: "Poppins", sans-serif;
+    }
+
+    /* Glass Overlay Card */
+    .glass-overlay {
+      backdrop-filter: blur(12px);
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+      color: white;
+    }
+
+    .glass-overlay label,
+    .glass-overlay h2 {
+      color: #fff;
+    }
+
+    .glass-overlay .form-control {
+      background: rgba(255, 255, 255, 0.9);
+      border: none;
+    }
