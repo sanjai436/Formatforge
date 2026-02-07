@@ -12,6 +12,12 @@ import base64
 import io
 from PIL import Image
 
+from fastapi import UploadFile, File
+from pdf2docx import Converter
+import tempfile
+import os
+
+
 
 
 
@@ -159,3 +165,39 @@ def get_history():
     finally:
         db.close()
 
+@app.post("/convert-pdf-to-docx")
+async def convert_pdf_to_docx(file: UploadFile = File(...)):
+    try:
+        # Create temp files
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_tmp:
+            pdf_tmp.write(await file.read())
+            pdf_path = pdf_tmp.name
+
+        docx_path = pdf_path.replace(".pdf", ".docx")
+
+        # Convert PDF → DOCX
+        cv = Converter(pdf_path)
+        cv.convert(docx_path)
+        cv.close()
+
+        # Read DOCX and encode
+        with open(docx_path, "rb") as f:
+            docx_bytes = f.read()
+
+        docx_base64 = base64.b64encode(docx_bytes).decode("utf-8")
+
+        # Cleanup temp files
+        os.remove(pdf_path)
+        os.remove(docx_path)
+
+        return {
+            "status": "success",
+            "docx": docx_base64,
+            "filename": "converted.docx"
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }

@@ -95,3 +95,16 @@
       background: rgba(255, 255, 255, 0.9);
       border: none;
     }
+
+/* FORCE dropdown link visibility on dark navbar */
+.navbar-dark .nav-link,
+.navbar-dark .dropdown-toggle {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Keep hover consistent */
+.navbar-dark .nav-link:hover,
+.navbar-dark .dropdown-toggle:hover {
+  color: #ffffff;
+}
+
