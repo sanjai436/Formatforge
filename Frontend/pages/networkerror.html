@@ -1,0 +1,63 @@
+<!-- NETWORK ERROR PAGE CONTENT ONLY -->
+
+<section
+  class="d-flex align-items-center justify-content-center text-center"
+  style="min-height: calc(100vh - 160px);"
+>
+  <div class="container">
+
+    <h2 class="display-6 fw-bold text-warning">
+      Network Error
+    </h2>
+
+    <p class="lead text-white mt-3">
+      It looks like your internet connection is unstable
+      or the server is currently unreachable.
+    </p>
+
+    <p class="text-muted">
+      Please check your connection and try again.
+    </p>
+
+    <!-- Retry using centralized routing -->
+    <button
+      class="btn btn-warning mt-3"
+      id="retryConnectionBtn"
+    >
+      Retry Connection
+    </button>
+
+    <!-- Go home fallback -->
+    <div class="mt-3">
+      <button
+        class="btn btn-outline-light"
+        data-page="home.html"
+      >
+        Go Back Home
+      </button>
+    </div>
+
+    <div class="mt-4">
+      <img
+        src="https://cdn-icons-png.flaticon.com/512/565/565547.png"
+        width="150"
+        alt="Network Error"
+      >
+    </div>
+
+  </div>
+</section>
+
+<!-- ================= PAGE-SPECIFIC SCRIPT ================= -->
+<script>
+  document
+    .getElementById("retryConnectionBtn")
+    .addEventListener("click", () => {
+      // Let main.js decide what to load again
+      if (window.lastRequestedPage) {
+        window.loadPage(window.lastRequestedPage);
+      } else {
+        window.loadPage("home.html");
+      }
+    });
+</script>

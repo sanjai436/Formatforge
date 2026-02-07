@@ -1,0 +1,54 @@
+<!-- CONVERSION PAGE CONTENT ONLY -->
+
+<section
+  class="d-flex align-items-center justify-content-center"
+  style="min-height: calc(100vh - 160px); padding-top: 80px;"
+>
+  <div class="container">
+
+    <h2 class="text-center text-white mb-4">
+      Upload Your Images
+    </h2>
+
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+
+        <div class="glass-overlay text-center">
+
+          <input
+            type="file"
+            class="form-control mb-3"
+            id="fileInput"
+            accept="image/*"
+            multiple
+          >
+
+          <div
+            id="previewContainer"
+            class="d-flex flex-wrap gap-2 justify-content-center mb-3"
+          ></div>
+
+          <button
+            id="convertBtn"
+            type="button"
+            class="btn btn-primary w-100"
+          >
+            Convert to PDF
+          </button>
+
+          <div id="status" class="mt-3 text-center"></div>
+
+          <a
+            id="downloadBtn"
+            class="btn btn-success w-100 mt-3 d-none"
+          >
+            Download PDF
+          </a>
+
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
