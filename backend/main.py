@@ -1,39 +1,25 @@
-from fastapi import FastAPI
-from database import engine
-from models import ConversionHistory
-from database import Base
-from sqlalchemy.orm import Session
-from database import SessionLocal
-
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import base64
 import io
-from PIL import Image
-
-from fastapi import UploadFile, File
-from pdf2docx import Converter
-import tempfile
 import os
+import tempfile
+from datetime import datetime
+
+from PIL import Image
+from PyPDF2 import PdfReader, PdfWriter
+from pdf2docx import Converter
+
+from database import engine, SessionLocal, Base
+from models import ConversionHistory
 
 
-
-
-
+# ================= APP INIT =================
 app = FastAPI()
 
-# Create database tables
 Base.metadata.create_all(bind=engine)
-# Dependency to get DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,67 +29,62 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------- PDF PAGE SIZE (A4) ----------
-# A4 size in pixels at 300 DPI
+# ================= CONSTANTS =================
 A4_WIDTH = 2480
 A4_HEIGHT = 3508
 
+
+# ================= REQUEST MODELS =================
 class ConvertRequest(BaseModel):
-    images: List[str]   # base64 images
+    images: List[str]
     enhance: bool = True
 
 
-class ImageRequest(BaseModel):
-    image: str
+class CompressRequest(BaseModel):
+    file: str
+    filename: str
 
+
+# ================= ROOT =================
 @app.get("/")
 def home():
     return {"message": "Backend connected successfully"}
 
+
+# ================= IMAGE → PDF =================
 @app.post("/convert-to-pdf")
 def convert_to_pdf(data: ConvertRequest):
     try:
         pdf_images = []
 
         for img_base64 in data.images:
-            # Split base64 header and data
             header, encoded = img_base64.split(",", 1)
             img_bytes = base64.b64decode(encoded)
 
-            # Open image
             original_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-
-            # Create blank A4 white page
             a4_page = Image.new("RGB", (A4_WIDTH, A4_HEIGHT), "white")
 
-            # Maintain aspect ratio
             img_ratio = original_img.width / original_img.height
             a4_ratio = A4_WIDTH / A4_HEIGHT
 
             if img_ratio > a4_ratio:
-                # Image is wider
                 new_width = A4_WIDTH
                 new_height = int(A4_WIDTH / img_ratio)
             else:
-                # Image is taller
                 new_height = A4_HEIGHT
                 new_width = int(A4_HEIGHT * img_ratio)
 
-            # Resize smoothly
             resized_img = original_img.resize(
                 (new_width, new_height),
                 Image.Resampling.LANCZOS
             )
 
-            # Center image on A4 page
             x_offset = (A4_WIDTH - new_width) // 2
             y_offset = (A4_HEIGHT - new_height) // 2
-
             a4_page.paste(resized_img, (x_offset, y_offset))
 
             pdf_images.append(a4_page)
 
-        # Create PDF
         pdf_buffer = io.BytesIO()
         pdf_images[0].save(
             pdf_buffer,
@@ -114,33 +95,92 @@ def convert_to_pdf(data: ConvertRequest):
 
         pdf_base64 = base64.b64encode(pdf_buffer.getvalue()).decode()
 
-        # Save history to database
+        # ===== SAVE HISTORY =====
         db = SessionLocal()
-
         history = ConversionHistory(
             original_filename="Multiple Images",
-            pdf_filename="formatforge.pdf",
-            status="success"
+            original_type="image",
+            action_type="convert",
+            output_filename="converted.pdf",
+            output_type="pdf",
+            status="success",
+            created_at=datetime.utcnow()
         )
+        db.add(history)
+        db.commit()
+        db.close()
 
+        return {"status": "success", "pdf": pdf_base64}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ================= UNIVERSAL COMPRESS =================
+@app.post("/compress")
+def compress_file(data: CompressRequest):
+    try:
+        header, encoded = data.file.split(",", 1)
+        file_bytes = base64.b64decode(encoded)
+        filename = data.filename.lower()
+
+        # ---------- IMAGE ----------
+        if filename.endswith((".jpg", ".jpeg", ".png")):
+            img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", quality=60, optimize=True)
+
+            compressed_base64 = base64.b64encode(buffer.getvalue()).decode()
+            mime = "image/jpeg"
+            original_type = "image"
+            output_type = "image"
+
+        # ---------- PDF ----------
+        elif filename.endswith(".pdf"):
+            reader = PdfReader(io.BytesIO(file_bytes))
+            writer = PdfWriter()
+
+            for page in reader.pages:
+                writer.add_page(page)
+
+            buffer = io.BytesIO()
+            writer.write(buffer)
+
+            compressed_base64 = base64.b64encode(buffer.getvalue()).decode()
+            mime = "application/pdf"
+            original_type = "pdf"
+            output_type = "pdf"
+
+        else:
+            return {"status": "error", "message": "Unsupported file type"}
+
+        # ===== SAVE HISTORY =====
+        db = SessionLocal()
+        history = ConversionHistory(
+            original_filename=data.filename,
+            original_type=original_type,
+            action_type="compress",
+            output_filename="compressed_" + data.filename,
+            output_type=output_type,
+            status="success",
+            created_at=datetime.utcnow()
+        )
         db.add(history)
         db.commit()
         db.close()
 
         return {
             "status": "success",
-            "pdf": pdf_base64
+            "file": compressed_base64,
+            "mime": mime
         }
-
 
     except Exception as e:
-        print("PDF Conversion Error:", e)
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        return {"status": "error", "message": str(e)}
 
 
+# ================= HISTORY =================
 @app.get("/history")
 def get_history():
     db = SessionLocal()
@@ -155,40 +195,40 @@ def get_history():
             {
                 "id": item.id,
                 "original_filename": item.original_filename,
-                "pdf_filename": item.pdf_filename,
+                "original_type": item.original_type,
+                "action_type": item.action_type,
+                "output_filename": item.output_filename,
+                "output_type": item.output_type,
                 "status": item.status,
                 "created_at": item.created_at.strftime("%Y-%m-%d %H:%M:%S")
             }
             for item in history
         ]
-
     finally:
         db.close()
 
+
+# ================= PDF → DOCX =================
 @app.post("/convert-pdf-to-docx")
 async def convert_pdf_to_docx(file: UploadFile = File(...)):
     try:
-        # Create temp files
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_tmp:
             pdf_tmp.write(await file.read())
             pdf_path = pdf_tmp.name
 
         docx_path = pdf_path.replace(".pdf", ".docx")
 
-        # Convert PDF → DOCX
         cv = Converter(pdf_path)
         cv.convert(docx_path)
         cv.close()
 
-        # Read DOCX and encode
         with open(docx_path, "rb") as f:
             docx_bytes = f.read()
 
-        docx_base64 = base64.b64encode(docx_bytes).decode("utf-8")
-
-        # Cleanup temp files
         os.remove(pdf_path)
         os.remove(docx_path)
+
+        docx_base64 = base64.b64encode(docx_bytes).decode("utf-8")
 
         return {
             "status": "success",
@@ -197,7 +237,4 @@ async def convert_pdf_to_docx(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        return {"status": "error", "message": str(e)}

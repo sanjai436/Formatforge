@@ -2,12 +2,26 @@
 window.enhanceEnabled = true;
 window.lastRequestedPage = "home.html";
 
+/* ================= BACKEND BASE URL ================= */
+/* 🔥 CHANGE THIS ONLY if backend port changes */
+const API_BASE = "http://localhost:8000";
+
+/* ================= GLOBAL SPA CLICK HANDLER ================= */
+document.addEventListener("click", function (e) {
+  const target = e.target.closest("[data-page]");
+  if (!target) return;
+
+  e.preventDefault();
+  const page = target.getAttribute("data-page");
+  if (page) loadPage(page);
+});
+
 /* ================= LOAD NAVBAR ================= */
 fetch("components/navbar.html")
   .then(res => res.text())
   .then(html => {
     document.getElementById("navbar-container").innerHTML = html;
-    attachNavbarEvents();
+    initNavbarControls();
   });
 
 /* ================= LOAD FOOTER ================= */
@@ -17,16 +31,8 @@ fetch("components/footer.html")
     document.getElementById("footer-container").innerHTML = html;
   });
 
-/* ================= NAVBAR EVENTS ================= */
-function attachNavbarEvents() {
-  document.querySelectorAll("[data-page]").forEach(link => {
-    link.onclick = e => {
-      e.preventDefault();
-      const page = link.dataset.page;
-      if (page) loadPage(page);
-    };
-  });
-
+/* ================= NAVBAR CONTROLS ================= */
+function initNavbarControls() {
   const enhanceBtn = document.getElementById("enhanceBtn");
   const themeBtn = document.getElementById("themeToggleBtn");
 
@@ -58,11 +64,13 @@ function loadPage(page) {
     .then(html => {
       const container = document.getElementById("page-content");
       container.innerHTML = html;
+
       highlightActiveNav(page);
 
-      /* 🔑 PAGE-SPECIFIC BINDINGS */
-      if (page === "conversion.html") bindConversionPage();
-      if (page === "history.html") bindHistoryPage();
+      requestAnimationFrame(() => {
+        if (page === "conversion.html") bindConversionPage();
+        if (page === "history.html") bindHistoryPage();
+      });
     })
     .catch(() => {
       fetch("pages/404.html")
@@ -74,18 +82,28 @@ function loadPage(page) {
     });
 }
 
-/* ================= CONVERSION LOGIC ================= */
+/* ================= CONVERSION PAGE ================= */
 function bindConversionPage() {
   const fileInput = document.getElementById("fileInput");
   const preview = document.getElementById("previewContainer");
   const status = document.getElementById("status");
   const download = document.getElementById("downloadBtn");
   const convertBtn = document.getElementById("convertBtn");
+  const compressBtn = document.getElementById("compressBtn");
 
-  if (!fileInput || !convertBtn) return;
+  if (!fileInput || !convertBtn || !compressBtn) {
+    console.log("Conversion page elements not found");
+    return;
+  }
 
+  preview.innerHTML = "";
+  status.innerHTML = "";
+  download.classList.add("d-none");
+
+  /* ===== IMAGE PREVIEW ===== */
   fileInput.onchange = () => {
     preview.innerHTML = "";
+
     [...fileInput.files].forEach(file => {
       if (!file.type.startsWith("image/")) return;
 
@@ -93,8 +111,8 @@ function bindConversionPage() {
       reader.onload = e => {
         const img = document.createElement("img");
         img.src = e.target.result;
-        img.style.width = "90px";
-        img.style.height = "90px";
+        img.style.width = "80px";
+        img.style.height = "80px";
         img.style.objectFit = "cover";
         img.style.borderRadius = "8px";
         img.style.border = "2px solid #fff";
@@ -111,47 +129,111 @@ function bindConversionPage() {
       reader.readAsDataURL(file);
     });
 
+  /* ===== CONVERT BUTTON ===== */
   convertBtn.onclick = async () => {
-    if (!fileInput.files.length) {
+    const files = [...fileInput.files];
+
+    if (!files.length) {
       status.innerHTML =
-        "<span class='text-danger'>Please select images</span>";
+        "<span class='text-danger'>Select images only</span>";
       return;
     }
 
-    status.innerText = "Processing images...";
-
     const images = [];
-    for (const file of fileInput.files) {
+
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        status.innerHTML =
+          "<span class='text-danger'>Convert supports images only</span>";
+        return;
+      }
       images.push(await toBase64(file));
     }
 
-    status.innerText = "Sending to server...";
+    status.innerText = "Converting...";
 
-    fetch("http://127.0.0.1:8000/convert-to-pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        images,
-        enhance: window.enhanceEnabled
-      })
-    })
-      .then(res => res.json())
-      .then(data => {
-        download.href =
-          "data:application/pdf;base64," + data.pdf;
-        download.download = "formatforge.pdf";
-        download.classList.remove("d-none");
-        status.innerHTML =
-          "<span class='text-success'>PDF ready for download</span>";
-      })
-      .catch(() => {
+    try {
+      const res = await fetch(`${API_BASE}/convert-to-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          images,
+          enhance: window.enhanceEnabled
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.status !== "success") {
         status.innerHTML =
           "<span class='text-danger'>Conversion failed</span>";
+        return;
+      }
+
+      download.href =
+        "data:application/pdf;base64," + data.pdf;
+      download.download = "converted.pdf";
+      download.classList.remove("d-none");
+
+      status.innerHTML =
+        "<span class='text-success'>Conversion complete</span>";
+
+    } catch (err) {
+      console.error(err);
+      status.innerHTML =
+        "<span class='text-danger'>Server error</span>";
+    }
+  };
+
+  /* ===== COMPRESS BUTTON ===== */
+  compressBtn.onclick = async () => {
+    const files = [...fileInput.files];
+
+    if (!files.length) {
+      status.innerHTML =
+        "<span class='text-danger'>Select a file</span>";
+      return;
+    }
+
+    status.innerText = "Compressing...";
+
+    try {
+      const base64File = await toBase64(files[0]);
+
+      const res = await fetch(`${API_BASE}/compress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          file: base64File,
+          filename: files[0].name
+        })
       });
+
+      const data = await res.json();
+
+      if (data.status !== "success") {
+        status.innerHTML =
+          "<span class='text-danger'>Compression failed</span>";
+        return;
+      }
+
+      download.href =
+        `data:${data.mime};base64,${data.file}`;
+      download.download = "compressed_" + files[0].name;
+      download.classList.remove("d-none");
+
+      status.innerHTML =
+        "<span class='text-success'>Compression complete</span>";
+
+    } catch (err) {
+      console.error(err);
+      status.innerHTML =
+        "<span class='text-danger'>Server error</span>";
+    }
   };
 }
 
-/* ================= HISTORY LOGIC ================= */
+/* ================= HISTORY PAGE ================= */
 function bindHistoryPage() {
   const tableBody = document.getElementById("historyTable");
   if (!tableBody) return;
@@ -164,7 +246,7 @@ function bindHistoryPage() {
     </tr>
   `;
 
-  fetch("http://127.0.0.1:8000/history")
+  fetch(`${API_BASE}/history`)
     .then(res => res.json())
     .then(data => {
       tableBody.innerHTML = "";
@@ -194,7 +276,7 @@ function bindHistoryPage() {
             <td>${statusBadge}</td>
             <td>
               <button class="btn btn-sm btn-outline-secondary" disabled>
-                <i class="bi bi-download"></i>
+                Download
               </button>
             </td>
           </tr>
@@ -221,8 +303,6 @@ function highlightActiveNav(page) {
     );
   });
 }
-
-
 
 /* ================= INITIAL LOAD ================= */
 loadPage("home.html");
